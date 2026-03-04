@@ -1,13 +1,18 @@
+const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
+const { createCanvas, loadImage } = require("canvas");
+
 module.exports = {
     config: {
         name: "brainwash",
-        version: "2.2.0",
+        version: "3.5.0",
         author: "Tawhid Ahmed",
-        countDown: 5,
+        countDown: 8,
         role: 0,
         description: {
-            bn: "কাউকে মেনশন দিয়ে বা রিপ্লাই দিয়ে ফানি ব্রেইনওয়াশ করার কমান্ড",
-            en: "Brainwash someone by mention or reply"
+            bn: "কাউকে শর্ট ও ফানি ব্রেইন শক ট্রিটমেন্ট দিন (Ex-এর স্মৃতি ডিলিট করুন)",
+            en: "Funny brain shock treatment with random roasting lines"
         },
         category: "fun",
         guide: {
@@ -20,42 +25,90 @@ module.exports = {
         const { threadID, messageID, mentions, type, messageReply } = event;
 
         let mentionID;
-
-        // ১. রিপ্লাই বা মেনশন থেকে আইডি নেওয়া
         if (type === "message_reply") {
             mentionID = messageReply.senderID;
         } else if (Object.keys(mentions).length > 0) {
             mentionID = Object.keys(mentions)[0];
         } else {
-            return api.sendMessage("⚠️ আরে সোনা, কাকে ব্রেইনওয়াশ করবে তাকে মেনশন দাও অথবা তার মেসেজে রিপ্লাই করো! 🙄", threadID, messageID);
+            return api.sendMessage("⚠️ আরে সোনা, কার বুদ্ধি কম তাকে মেনশন দাও বা রিপ্লাই করো! 🙄", threadID, messageID);
         }
 
         try {
-            const name = await usersData.getName(mentionID) || "User";
+            // ১. নাম সংগ্রহ (Fix: No Null Name)
+            const info = await api.getUserInfo(mentionID);
+            let name = info[mentionID].name || "প্রিয় নির্বোধ";
 
-            const lines = [
-                `🧠 [ 𝗕𝗿𝗮𝗶𝗻𝘄𝗮𝘀𝗵𝗶𝗻𝗴 𝗦𝘁𝗮𝗿𝘁𝗲𝗱 ] 🧠\n━━━━━━━━━━━━━━━━━━\n🌀 ${name}, তোমার মাথার ভেতরে জং ধরা নাট-বল্টু পরিষ্কার করা হচ্ছে...`,
-                `🧼 সাবান আর হুইল পাউডার দিয়ে ${name}-এর মগজ ধোলাই চলছে... উফ্! কত ময়লা! thuuu 🤧🤢`,
-                `💾 ${name}-এর পুরনো আবর্জনা মেমোরি ডিলিট করা হচ্ছে... [████████▒▒] 𝟴𝟬%`,
-                `🚫 Warning! ${name}-এর মাথায় বুদ্ধির বদলে শুধু গোবর পাওয়া গেছে! সেটি সরানো হচ্ছে...`,
-                `✨ সফলভাবে ব্রেইনওয়াশ করা হয়েছে! এখন ${name} নিজেকে Tawhid Ahmed-এর পাখি মনে করছে! 🌸😙`,
-                `🎀 এখন থেকে ${name} আর আজেবাজে চিন্তা করবে না, শুধু বটের কথা শুনবে!😾`,
-                `✅ 𝗗𝗼𝗻𝗲! ${name} এখন একদম নতুনের মতো রিফ্রেশড! কিন্তু বুদ্ধি আর ফিরে আসলো না... 🙂`
+            // ২. তোমার দেওয়া "Ex" এর লাইনসহ মজাদার কিছু লাইন
+            const funnyLines = [
+                `🤮 ছিঃ! ${name}-এর মাথায় তো দেখি গোবর ভরা! 💩 একে ব্রেইনওয়াশ করে লাভ নেই, সরাসরি ৪৪০ ভোল্টের শক দিতে হবে! ⚡😈`,
+                `🧐 ${name}-এর মাথায় বুদ্ধির বদলে আবর্জনা পাওয়া গেছে! 🗑️ সার্ফ এক্সেল দিয়ে মগজ ধোলাই চলছে... একটু দাঁড়াও! 🧼🌀`,
+                `💔 ওরে বাবা! ${name}-এর মাথায় তো ওর "Ex"-এর স্মৃতি পাওয়া গেছে! 😭 আহ্! কত্ত ভালোবাসে তারে! চলো শক দিয়ে সব ডিলিট করি! ⚡🤣`,
+                `🚫 Warning! ${name}-এর মগজে জং ধরে গেছে। 🛠️ হাতুড়ি দিয়ে পিটিয়ে নাট-বল্টু ঠিক করা হচ্ছে! 🔨🔨`,
+                `🧠 ${name}-এর মাথায় ব্রেইন খুঁজতে গিয়ে শুধু বাতাস পাওয়া গেল! 💨 একে একটু শক দিয়ে চার্জ করে দিচ্ছি... 🔋⚡`,
+                `🤢 ইশ! ${name}-এর মাথায় এত ময়লা যে বটের অ্যালার্জি হয়ে যাচ্ছে! 🤧 ব্রেইনটা খুলে রোদে শুকোতে দেওয়া দরকার। ☀️🔥`,
+                `🌀 ${name}-এর স্মৃতি থেকে পুরনো সব আবর্জনা ডিলিট করা হচ্ছে... [██████▒▒▒▒] 𝟲𝟬% 💾`
             ];
 
-            await api.sendMessage(`🔄 ${name}-নড়াচড়া করো না, তোমার ব্রেইনওয়াশ করা হচ্ছে 😗`, threadID, messageID);
+            const randomText = funnyLines[Math.floor(Math.random() * funnyLines.length)];
+            api.sendMessage(randomText, threadID, messageID);
 
-            // একে একে মেসেজ পাঠানোর লজিক (Loop)
-            for (const line of lines) {
-                // ২.৫ সেকেন্ড অপেক্ষা
-                await new Promise(resolve => setTimeout(resolve, 5500));
-                api.sendMessage(line, threadID);
-            }
+            // ৩. ইমেজ প্রসেসিং (Canvas)
+            const canvas = createCanvas(1200, 600);
+            const ctx = canvas.getContext("2d");
 
-            // ফাইনাল মেসেজ
-            return setTimeout(() => {
-                api.sendMessage(`🎊 অভিনন্দন ${name}! তোমার ব্রেইন এখন একদম ক্লিন!\n━━━━━━━━━━━━━━━━━━\n👤 𝗢𝘄𝗻𝗲𝗿: 𝗧𝗮𝘄𝗵𝗶𝗱 𝗔𝗵𝗺𝗲𝗱\n🎀 𝗔𝘀𝘀𝗶𝘀𝘁𝗮𝗻𝘁: 𝗡𝗲𝘇𝘂𝗸𝗼 𝗖𝗵𝗮𝗻`, threadID);
-            }, 3000);
+            // ব্যাকগ্রাউন্ড (একটি ফানি শক দেওয়ার বেজ ইমেজ)
+            const bgUrl = "https://i.imgur.com/uR5CqUo.jpeg"; 
+            const avatarUrl = `https://graph.facebook.com/${mentionID}/picture?width=512&height=512&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
+
+            const [bg, avatar] = await Promise.all([
+                loadImage(bgUrl),
+                loadImage(avatarUrl)
+            ]);
+
+            ctx.drawImage(bg, 0, 0, 1200, 600);
+            ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+            ctx.fillRect(0, 0, 1200, 600);
+
+            // প্রোফাইল পিকচার ড্রয়িং
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(600, 200, 150, 0, Math.PI * 2, true);
+            ctx.lineWidth = 15;
+            ctx.strokeStyle = "#ffcc00"; 
+            ctx.stroke();
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(avatar, 450, 50, 300, 300);
+            ctx.restore();
+
+            // ৪. স্টাইলিশ টেক্সট ড্রয়িং
+            ctx.textAlign = "center";
+            ctx.font = "bold 55px Arial";
+            ctx.fillStyle = "#ff0000";
+            ctx.fillText("🆂🅷🅾🅲🅺 🆃🆁🅴🅰🆃🅼🅴🅽🆃", 600, 430);
+
+            const gradient = ctx.createLinearGradient(0, 440, 0, 510);
+            gradient.addColorStop(0, "#ffffff");
+            gradient.addColorStop(1, "#FFD700");
+            ctx.font = "bold 70px Arial";
+            ctx.fillStyle = gradient;
+            ctx.fillText(name.toUpperCase(), 600, 500);
+
+            // ৫. ফাইল সেভ ও সেন্ড
+            const cacheDir = path.join(__dirname, "cache");
+            if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+            const cachePath = path.join(cacheDir, `brainwash_${mentionID}.png`);
+            
+            fs.writeFileSync(cachePath, canvas.toBuffer("image/png"));
+
+            const finalMsg = `✅ সফলভাবে শক ট্রিটমেন্ট দেওয়া হয়েছে! এখন ${name} আগের চেয়ে ৫% বেশি বুদ্ধিমান। 😹\n━━━━━━━━━━━━━━━━━━\n👤 𝗢𝘄𝗻𝗲𝗿: 𝓣𝓪𝔀𝓱𝓲𝓭 𝓐𝓱𝓶𝓮𝓭 💞\n🎀 𝗔𝘀𝘀𝗶𝘀𝘁𝗮𝗻𝘁: 𝗡𝗲𝘇𝘂𝗸𝗼 𝗖𝗵𝗮𝗻`;
+
+            return api.sendMessage({
+                body: finalMsg,
+                attachment: fs.createReadStream(cachePath)
+            }, threadID, () => {
+                if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+            }, messageID);
 
         } catch (err) {
             return api.sendMessage(`❌ এরর এসেছে সোনা: ${err.message}`, threadID, messageID);
